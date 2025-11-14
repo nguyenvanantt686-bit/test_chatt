@@ -3,35 +3,98 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Chat App – Render Free Demo</title>
+<title>Chat Room Realtime</title>
 <style>
-*{box-sizing:border-box;font-family:Inter,system-ui,Arial}
-body{display:flex;height:100vh;align-items:center;justify-content:center;background:#f5f7fb;margin:0}
-.panel{width:600px;background:#fff;border-radius:12px;box-shadow:0 6px 24px rgba(20,20,40,0.08);padding:18px}
-.history{height:420px;overflow:auto;padding:8px;border:1px solid #eef2f7;border-radius:8px;background:#fbfdff}
-.row{display:flex;margin:6px 0}
-.msg.user{align-self:flex-end;background:#e6f0ff;padding:8px 12px;border-radius:12px;max-width:80%}
-.msg.bot{align-self:flex-start;background:#f2f4f7;padding:8px 12px;border-radius:12px;max-width:80%}
-.controls{display:flex;gap:8px;margin-top:10px}
-.controls input{flex:1;padding:10px;border-radius:8px;border:1px solid #d7dbe0}
-button{padding:10px 14px;border-radius:8px;border:none;cursor:pointer;background:#2563eb;color:#fff}
-small{color:#6b7280}
+body{font-family:sans-serif;background:#f5f7fb;display:flex;justify-content:center;padding:20px}
+.panel{width:600px;background:#fff;padding:16px;border-radius:12px;box-shadow:0 4px 16px rgba(0,0,0,0.1)}
+#history{height:400px;overflow:auto;border:1px solid #eee;padding:8px;margin-bottom:8px;background:#fbfdff}
+.msg.user{margin:4px 0;padding:4px 8px;border-radius:6px;max-width:80%}
+.msg.bot{margin:4px 0;padding:4px 8px;border-radius:6px;background:#eee;font-style:italic;max-width:80%}
+.controls{display:flex;gap:8px}
+.controls input{flex:1;padding:8px;border-radius:6px;border:1px solid #ccc}
+.controls button{padding:8px 12px;border-radius:6px;background:#2563eb;color:#fff;border:none;cursor:pointer}
 </style>
 </head>
 <body>
 <div class="panel">
-<h3>Chat App — each browser = 1 session</h3>
-<div class="history" id="history"></div>
-
-
+<h3>Chat Room Realtime</h3>
+<div id="history"></div>
 <div class="controls">
-<input id="input" placeholder="Gõ tin nhắn..." />
+<input id="input" placeholder="Nhập tin nhắn..." />
 <button id="send">Gửi</button>
 </div>
-<div style="margin-top:8px"><small>Session ID: <span id="clientId"></span></small></div>
 </div>
 
+<script>
+(function(){
+const historyEl = document.getElementById('history');
+const inputEl = document.getElementById('input');
+const sendBtn = document.getElementById('send');
 
-<script src="/app.js"></script>
+// tạo client_id + nickname
+let clientId = localStorage.getItem('client_id');
+if(!clientId){
+  clientId = crypto.randomUUID();
+  localStorage.setItem('client_id', clientId);
+}
+
+let nickname = localStorage.getItem('nickname');
+if(!nickname){
+  nickname = prompt("Nhập tên của bạn:", "User");
+  localStorage.setItem('nickname', nickname);
+}
+
+// tạo màu dựa trên client_id
+function hashColor(str){
+  let hash=0;
+  for(let i=0;i<str.length;i++){ hash = str.charCodeAt(i)+((hash<<5)-hash); }
+  const c = (hash & 0x00FFFFFF).toString(16).toUpperCase();
+  return "#" + "00000".substring(0,6-c.length) + c;
+}
+const myColor = hashColor(clientId);
+
+// hiển thị tin nhắn
+function appendMsg(item){
+  const div = document.createElement('div');
+  div.className = 'msg ' + item.role;
+
+  if(item.role==='user'){
+    div.textContent = item.name + ": " + item.content;
+    div.style.background = (item.client_id===clientId) ? '#e6f0ff' : '#f0f0f0';
+    div.style.color = (item.client_id===clientId) ? '#0b3d91' : '#000';
+  } else if(item.role==='bot'){
+    div.textContent = item.content;
+    div.style.background = '#eee';
+    div.style.fontStyle = 'italic';
+  }
+
+  historyEl.appendChild(div);
+  historyEl.scrollTop = historyEl.scrollHeight;
+}
+
+// SSE
+const evtSource = new EventSource('/events');
+evtSource.onmessage = function(e){
+  const msgs = JSON.parse(e.data);
+  msgs.forEach(appendMsg);
+}
+
+// gửi tin nhắn
+async function send(){
+  const txt = inputEl.value.trim();
+  if(!txt) return;
+  inputEl.value='';
+
+  await fetch('/api/chat',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ client_id: clientId, name: nickname, message: txt })
+  });
+}
+
+sendBtn.addEventListener('click', send);
+inputEl.addEventListener('keydown', e => { if(e.key==='Enter') send(); });
+})();
+</script>
 </body>
 </html>
